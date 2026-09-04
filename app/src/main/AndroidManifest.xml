@@ -1,8 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:allowBackup="true" android:label="فاکتور انار رایانه" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:supportsRtl="true" android:theme="@style/AppTheme">
+    <application
+        android:allowBackup="true"
+        android:label="تنخواه ماهانه"
+        android:icon="@drawable/ic_pettycash"
+        android:roundIcon="@drawable/ic_pettycash"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
         <activity android:name=".MainActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".DashboardActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".ProInvoiceActivity" android:exported="true" android:screenOrientation="portrait">
+        <activity android:name=".ProInvoiceActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".PettyCashActivity" android:exported="true" android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
