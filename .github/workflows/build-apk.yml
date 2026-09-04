@@ -1,7 +1,7 @@
-name: Build Anar Invoice APK
+name: Build Monthly Petty Cash APK
 on:
   push:
-    branches: [anar-invoice-apk]
+    branches: [monthly-petty-cash-apk]
   workflow_dispatch:
 
 jobs:
@@ -26,6 +26,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AnarRayaneh-Invoice-APK
+          name: Monthly-Petty-Cash-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
