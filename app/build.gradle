@@ -4,7 +4,7 @@ android {
     namespace 'com.anarrayaneh.invoice'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.anarrayaneh.invoice'
+        applicationId 'com.monthly.pettycash'
         minSdk 29
         targetSdk 35
         versionCode 1
