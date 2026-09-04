@@ -10,10 +10,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Restore project
-        run: |
-          base64 -d anar_invoice_project.zip.b64 > /tmp/anar_invoice_project.zip
-          unzip -o /tmp/anar_invoice_project.zip -d .
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
