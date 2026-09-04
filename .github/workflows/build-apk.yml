@@ -1,7 +1,7 @@
-name: Build Monthly Petty Cash APK
+name: Build Hesabyar APK
 on:
   push:
-    branches: [monthly-petty-cash-apk]
+    branches: [hesabyar-mvp]
   workflow_dispatch:
 
 jobs:
@@ -26,6 +26,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Monthly-Petty-Cash-APK
+          name: Hesabyar-MVP-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
