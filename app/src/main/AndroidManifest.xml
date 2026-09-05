@@ -6,7 +6,10 @@
         android:roundIcon="@drawable/ic_hesabyar"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".HesabyarActivity" android:exported="true" android:screenOrientation="portrait">
+        <activity
+            android:name="com.anarrayaneh.invoice.HesabyarActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
