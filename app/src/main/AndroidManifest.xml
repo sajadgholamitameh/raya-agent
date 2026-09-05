@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
+        android:name="com.anarrayaneh.invoice.HesabyarApp"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="حسابیار"
         android:icon="@drawable/ic_hesabyar"
         android:roundIcon="@drawable/ic_hesabyar"
