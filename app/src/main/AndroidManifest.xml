@@ -7,7 +7,7 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <activity
-            android:name="com.anarrayaneh.invoice.HesabyarActivity"
+            android:name="com.anarrayaneh.invoice.ModernHesabyarActivity"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>
