@@ -10,7 +10,7 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <activity
-            android:name="com.anarrayaneh.invoice.ModernHesabyarActivity"
+            android:name="com.anarrayaneh.invoice.HesabyarFinalActivity"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>
