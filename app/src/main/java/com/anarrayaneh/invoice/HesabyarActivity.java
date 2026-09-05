@@ -6,6 +6,7 @@ import android.content.*;
 import android.database.Cursor;
 import android.database.sqlite.*;
 import android.graphics.*;
+import android.graphics.pdf.PdfDocument;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.provider.MediaStore;
@@ -35,18 +36,19 @@ public class HesabyarActivity extends Activity {
     void base(String title){
         ScrollView sv = new ScrollView(this); sv.setFillViewport(true); sv.setBackgroundColor(BG);
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(dp(16),dp(10),dp(16),dp(28)); root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL); sv.addView(root);
+        content = root;
         LinearLayout top = new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL); top.setOrientation(LinearLayout.HORIZONTAL);
         TextView t = text(title,24,Color.WHITE,true); t.setPadding(dp(14),0,0,0); top.addView(t,new LinearLayout.LayoutParams(0,dp(58),1));
         TextView brand = text("حسابیار",18,GOLD,true); brand.setGravity(Gravity.CENTER); top.addView(brand,new LinearLayout.LayoutParams(dp(105),dp(58)));
         top.setBackground(round(NAVY,18)); root.addView(top,new LinearLayout.LayoutParams(-1,dp(58)));
-        space(12); content = root;
+        space(12);
         setContentView(sv);
     }
 
     void showDashboard(){
         base("مدیریت مالی کسب‌وکار");
         String business = prefs.getString("business","کسب‌وکار من");
-        TextView biz = text(business,20,TEXT,true); biz.setGravity(Gravity.RIGHT); content.addView(biz); 
+        TextView biz = text(business,20,TEXT,true); biz.setGravity(Gravity.RIGHT); content.addView(biz);
         TextView sub = text("فروش، هزینه، مشتری و مطالبات — کاملاً آفلاین",13,MUTED,false); content.addView(sub); space(12);
         long sales = db.sum("SALE", currentMonth), expenses = db.sum("EXPENSE", currentMonth), receivable = db.totalReceivable();
         LinearLayout r1 = row(); r1.addView(stat("فروش این ماه",money(sales),TEAL),new LinearLayout.LayoutParams(0,dp(105),1)); gap(r1); r1.addView(stat("هزینه این ماه",money(expenses),RED),new LinearLayout.LayoutParams(0,dp(105),1)); content.addView(r1); space(8);
@@ -74,15 +76,14 @@ public class HesabyarActivity extends Activity {
     void saleDialog(){
         LinearLayout f=form(); EditText customer=input("نام مشتری (اختیاری)"); EditText phone=input("موبایل مشتری (اختیاری)"); EditText desc=input("شرح کالا / خدمات"); EditText amount=moneyInput("مبلغ کل (تومان)"); EditText paid=moneyInput("پرداختی الان (تومان)"); EditText date=input("تاریخ شمسی",Jalali.today());
         f.addView(customer); f.addView(phone); f.addView(desc); f.addView(amount); f.addView(paid); f.addView(date);
-        new AlertDialog.Builder(this).setTitle("فاکتور / فروش جدید").setView(wrap(f)).setNegativeButton("انصراف",null).setPositiveButton("ثبت",null).create().setOnShowListener(x->{
-            AlertDialog d=(AlertDialog)x; d.getButton(-1).setOnClickListener(v->{
-                long a=num(amount.getText().toString()); if(a<=0){amount.setError("مبلغ را وارد کنید");return;}
-                long p=num(paid.getText().toString()); if(p>a)p=a; String dt=date.getText().toString().trim(); if(!validDate(dt)){date.setError("مثال: 1405/06/14");return;}
-                long cid=0; String cn=customer.getText().toString().trim(); if(!cn.isEmpty()) cid=db.customer(cn,phone.getText().toString().trim()); else p=a;
-                String month=dt.substring(0,7), inv=db.nextInvoice(month); long id=db.addTx(dt,month,"SALE",cid,desc.getText().toString().trim(),a,p,inv);
-                d.dismiss(); showDashboard(); new AlertDialog.Builder(this).setTitle("فروش ثبت شد").setMessage("شماره فاکتور: "+inv+"\nمانده: "+money(a-p)).setNegativeButton("بستن",null).setPositiveButton("ذخیره PDF فاکتور",(q,w)->exportInvoice(id)).show();
-            });
-        });
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("فاکتور / فروش جدید").setView(wrap(f)).setNegativeButton("انصراف",null).setPositiveButton("ثبت",null).create();
+        d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{
+            long a=num(amount.getText().toString()); if(a<=0){amount.setError("مبلغ را وارد کنید");return;}
+            long p=num(paid.getText().toString()); if(p>a)p=a; String dt=date.getText().toString().trim(); if(!validDate(dt)){date.setError("مثال: 1405/06/14");return;}
+            long cid=0; String cn=customer.getText().toString().trim(); if(!cn.isEmpty()) cid=db.customer(cn,phone.getText().toString().trim()); else p=a;
+            String month=dt.substring(0,7), inv=db.nextInvoice(month); long id=db.addTx(dt,month,"SALE",cid,desc.getText().toString().trim(),a,p,inv);
+            d.dismiss(); showDashboard(); new AlertDialog.Builder(this).setTitle("فروش ثبت شد").setMessage("شماره فاکتور: "+inv+"\nمانده: "+money(a-p)).setNegativeButton("بستن",null).setPositiveButton("ذخیره PDF فاکتور",(q,w)->exportInvoice(id)).show();
+        })); d.show();
     }
 
     void expenseDialog(){
