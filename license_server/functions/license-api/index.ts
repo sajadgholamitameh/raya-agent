@@ -6,6 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+const LICENSE_DAYS = 365
+const LICENSE_MS = LICENSE_DAYS * 24 * 60 * 60 * 1000
+
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
     status,
@@ -33,6 +36,12 @@ async function sha256(input: string) {
   const data = new TextEncoder().encode(input)
   const hash = await crypto.subtle.digest('SHA-256', data)
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function expired(expiresAt: unknown) {
+  if (!expiresAt) return true
+  const ts = Date.parse(String(expiresAt))
+  return !Number.isFinite(ts) || Date.now() >= ts
 }
 
 Deno.serve(async (req) => {
@@ -74,7 +83,7 @@ Deno.serve(async (req) => {
     const keyHash = await sha256(key)
     const { data: row, error } = await admin
       .from('licenses')
-      .select('serial,status,bound_email,activated_at,activation_count')
+      .select('serial,status,bound_email,activated_at,expires_at,activation_count')
       .eq('serial', serial)
       .eq('license_key_hash', keyHash)
       .maybeSingle()
@@ -88,13 +97,21 @@ Deno.serve(async (req) => {
 
     const bound = normalizeEmail(row.bound_email)
 
-    // Already activated: only the same email may use/recover the license.
+    // Already activated: same email may recover it only until the original expiry.
     if (row.status === 'active') {
       if (bound !== email) {
-        return json(409, {
+        return json(409, { ok: false, code: 'already_bound', serial })
+      }
+
+      if (expired(row.expires_at)) {
+        return json(403, {
           ok: false,
-          code: 'already_bound',
+          code: 'expired',
           serial,
+          email,
+          activated_at: row.activated_at,
+          expires_at: row.expires_at,
+          server_time: new Date().toISOString(),
         })
       }
 
@@ -109,6 +126,8 @@ Deno.serve(async (req) => {
         serial,
         email,
         activated_at: row.activated_at,
+        expires_at: row.expires_at,
+        days_valid: LICENSE_DAYS,
         server_time: new Date().toISOString(),
       })
     }
@@ -119,18 +138,22 @@ Deno.serve(async (req) => {
         ok: false,
         code: 'unused',
         serial,
+        days_valid: LICENSE_DAYS,
         server_time: new Date().toISOString(),
       })
     }
 
-    // Atomic first activation. A concurrent request can only win once.
-    const now = new Date().toISOString()
+    // First activation fixes the expiry at exactly 365 days from now.
+    const nowDate = new Date()
+    const now = nowDate.toISOString()
+    const expiresAt = new Date(nowDate.getTime() + LICENSE_MS).toISOString()
     const { data: activated, error: updateError } = await admin
       .from('licenses')
       .update({
         status: 'active',
         bound_email: email,
         activated_at: now,
+        expires_at: expiresAt,
         last_seen_at: now,
         activation_count: Number(row.activation_count ?? 0) + 1,
         last_app_version: appVersion,
@@ -138,7 +161,7 @@ Deno.serve(async (req) => {
       .eq('serial', serial)
       .eq('status', 'unused')
       .is('bound_email', null)
-      .select('serial,status,bound_email,activated_at')
+      .select('serial,status,bound_email,activated_at,expires_at')
       .maybeSingle()
 
     if (updateError) {
@@ -153,6 +176,8 @@ Deno.serve(async (req) => {
         serial,
         email,
         activated_at: activated.activated_at,
+        expires_at: activated.expires_at,
+        days_valid: LICENSE_DAYS,
         server_time: new Date().toISOString(),
       })
     }
@@ -160,17 +185,30 @@ Deno.serve(async (req) => {
     // Resolve an activation race by reading the final binding.
     const { data: finalRow } = await admin
       .from('licenses')
-      .select('status,bound_email,activated_at')
+      .select('status,bound_email,activated_at,expires_at')
       .eq('serial', serial)
       .single()
 
     if (finalRow?.status === 'active' && normalizeEmail(finalRow.bound_email) === email) {
+      if (expired(finalRow.expires_at)) {
+        return json(403, {
+          ok: false,
+          code: 'expired',
+          serial,
+          email,
+          activated_at: finalRow.activated_at,
+          expires_at: finalRow.expires_at,
+          server_time: new Date().toISOString(),
+        })
+      }
       return json(200, {
         ok: true,
         code: 'active',
         serial,
         email,
         activated_at: finalRow.activated_at,
+        expires_at: finalRow.expires_at,
+        days_valid: LICENSE_DAYS,
         server_time: new Date().toISOString(),
       })
     }
