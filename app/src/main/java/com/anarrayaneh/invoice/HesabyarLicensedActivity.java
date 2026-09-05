@@ -20,17 +20,19 @@ import javax.crypto.spec.SecretKeySpec;
  * Hesabyar licensing layer.
  * - 15-day trial from first run.
  * - 1,800 pre-issued license serials.
+ * - Each activated license is valid for 365 days from activation.
  * - Activation records the customer's email + license key.
  * - License/trial state is included in Android Auto Backup and the app snapshot.
  *
- * This is an offline licensing model. It validates genuine issued keys locally.
- * A future server-backed edition can additionally enforce one-key/one-email
- * globally across multiple devices.
+ * This build still supports local validation. The central license server layer
+ * is prepared separately to enforce one-key/one-email and expiry globally.
  */
 public class HesabyarLicensedActivity extends HesabyarItemsActivity {
     static final int TRIAL_DAYS = 15;
+    static final int LICENSE_DAYS = 365;
     static final long DAY_MS = 24L * 60L * 60L * 1000L;
     static final long TRIAL_MS = TRIAL_DAYS * DAY_MS;
+    static final long LICENSE_MS = LICENSE_DAYS * DAY_MS;
     static final int LICENSE_COUNT = 1800;
     static final String LIC_SECRET = "Hesabyar.License.2026.Raya#1800!Seed";
     static final Pattern KEY_PATTERN = Pattern.compile("^HYA-(\\d{4})-([A-F0-9]{5})-([A-F0-9]{5})$");
@@ -63,7 +65,27 @@ public class HesabyarLicensedActivity extends HesabyarItemsActivity {
         if (!prefs.getBoolean("license_activated", false)) return false;
         String email = prefs.getString("license_email", "");
         String key = prefs.getString("license_key", "");
-        return validEmail(email) && validateLicenseKey(key) > 0;
+        long activatedAt = prefs.getLong("license_activated_at", 0L);
+        if (!validEmail(email) || validateLicenseKey(key) <= 0 || activatedAt <= 0L) return false;
+        return effectiveNow() < activatedAt + LICENSE_MS;
+    }
+
+    boolean licenseExpired() {
+        if (!prefs.getBoolean("license_activated", false)) return false;
+        long activatedAt = prefs.getLong("license_activated_at", 0L);
+        return activatedAt > 0L && effectiveNow() >= activatedAt + LICENSE_MS;
+    }
+
+    long licenseExpiry() {
+        long activatedAt = prefs.getLong("license_activated_at", 0L);
+        return activatedAt <= 0L ? 0L : activatedAt + LICENSE_MS;
+    }
+
+    int licenseDaysRemaining() {
+        long expiry = licenseExpiry();
+        if (expiry <= 0L) return 0;
+        long remain = Math.max(0L, expiry - effectiveNow());
+        return (int)Math.max(0, (remain + DAY_MS - 1) / DAY_MS);
     }
 
     long effectiveNow() {
@@ -94,14 +116,26 @@ public class HesabyarLicensedActivity extends HesabyarItemsActivity {
         long now = System.currentTimeMillis();
         if (now - lastGateAt < 350L) return;
         lastGateAt = now;
-        if (isLicensed() || trialActive()) return;
+        if (isLicensed()) return;
+        if (!prefs.getBoolean("license_activated", false) && trialActive()) return;
         showActivationDialog(true);
     }
 
     @Override void showDashboard() {
         super.showDashboard();
         if (root == null) return;
-        if (!isLicensed() && trialActive()) {
+        if (isLicensed()) {
+            TextView banner = text("لایسنس یک‌ساله فعال • " + licenseDaysRemaining() + " روز باقی مانده", 12, Color.WHITE, true);
+            banner.setGravity(Gravity.CENTER);
+            banner.setPadding(dp(12), dp(9), dp(12), dp(9));
+            banner.setBackground(gradient(new int[]{Color.rgb(20,126,111), Color.rgb(0,165,150)}, 16));
+            banner.setElevation(dp(2));
+            banner.setOnClickListener(v -> showLicenseCenter());
+            int index = Math.min(1, root.getChildCount());
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(45));
+            lp.topMargin = dp(8); lp.bottomMargin = dp(4);
+            root.addView(banner, index, lp);
+        } else if (!prefs.getBoolean("license_activated", false) && trialActive()) {
             TextView banner = text("نسخه آزمایشی • " + trialDaysRemaining() + " روز باقی مانده   |   فعال‌سازی لایسنس", 12, Color.WHITE, true);
             banner.setGravity(Gravity.CENTER);
             banner.setPadding(dp(12), dp(9), dp(12), dp(9));
@@ -138,13 +172,22 @@ public class HesabyarLicensedActivity extends HesabyarItemsActivity {
             String email = prefs.getString("license_email", "");
             int serial = prefs.getInt("license_serial", 0);
             TextView ok = text("✓ حسابیار فعال است", 20, Color.rgb(17,145,105), true);
-            TextView details = text("ایمیل لایسنس: " + email + "\nشماره لایسنس: " + String.format(Locale.US, "%04d", serial) + "\nوضعیت: دائمی", 14, INK, false);
+            TextView details = text(
+                    "ایمیل لایسنس: " + email +
+                    "\nشماره لایسنس: " + String.format(Locale.US, "%04d", serial) +
+                    "\nنوع لایسنس: یک‌ساله (۳۶۵ روز)" +
+                    "\nاعتبار باقی‌مانده: " + licenseDaysRemaining() + " روز",
+                    14, INK, false);
             details.setPadding(0, dp(10), 0, dp(4));
             box.addView(ok); box.addView(details);
             new AlertDialog.Builder(this).setTitle("لایسنس حسابیار").setView(box).setPositiveButton("بستن", null).show();
+        } else if (licenseExpired()) {
+            box.addView(text("اعتبار یک‌ساله این لایسنس تمام شده است. برای ادامه باید لایسنس جدید فعال شود.", 15, RED, true));
+            new AlertDialog.Builder(this).setTitle("پایان اعتبار لایسنس").setView(box).setNegativeButton("بستن", null).setPositiveButton("فعال‌سازی لایسنس جدید", (d,w) -> showActivationDialog(false)).show();
         } else {
             String state = trialActive() ? "دوره آزمایشی فعال است؛ " + trialDaysRemaining() + " روز باقی مانده." : "دوره آزمایشی ۱۵ روزه به پایان رسیده است.";
             box.addView(text(state, 15, trialActive() ? DEEP2 : RED, true));
+            box.addView(text("هر لایسنس پس از فعال‌سازی ۳۶۵ روز اعتبار دارد.", 13, SOFT_TEXT, false));
             new AlertDialog.Builder(this).setTitle("لایسنس حسابیار").setView(box).setNegativeButton("بستن", null).setPositiveButton("فعال‌سازی", (d,w) -> showActivationDialog(false)).show();
         }
     }
@@ -158,10 +201,19 @@ public class HesabyarLicensedActivity extends HesabyarItemsActivity {
         form.setPadding(dp(18), dp(8), dp(18), dp(2));
         form.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
 
-        TextView info = text(mandatory ? "دوره آزمایشی ۱۵ روزه تمام شده است. برای ادامه، لایسنس را فعال کنید." : "ایمیل مشتری و کد لایسنس را وارد کنید.", 13, mandatory ? RED : SOFT_TEXT, false);
+        String message;
+        if (licenseExpired()) {
+            message = "اعتبار یک‌ساله لایسنس قبلی تمام شده است. یک کد لایسنس جدید وارد کنید.";
+        } else if (mandatory) {
+            message = "دوره آزمایشی ۱۵ روزه تمام شده است. برای ادامه، لایسنس یک‌ساله را فعال کنید.";
+        } else {
+            message = "ایمیل مشتری و کد لایسنس را وارد کنید. اعتبار هر کد ۳۶۵ روز از زمان فعال‌سازی است.";
+        }
+        TextView info = text(message, 13, mandatory || licenseExpired() ? RED : SOFT_TEXT, false);
         info.setPadding(0, 0, 0, dp(10));
         EditText email = input("ایمیل مشتری");
         email.setInputType(33);
+        email.setText(prefs.getString("license_email", ""));
         EditText key = input("HYA-0001-ABCDE-F1234");
         key.setInputType(1 | 524288);
         form.addView(info);
@@ -170,7 +222,7 @@ public class HesabyarLicensedActivity extends HesabyarItemsActivity {
         form.addView(key, new LinearLayout.LayoutParams(-1, dp(56)));
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this)
-                .setTitle("فعال‌سازی حسابیار")
+                .setTitle("فعال‌سازی لایسنس یک‌ساله")
                 .setView(form)
                 .setPositiveButton("فعال‌سازی", null);
         if (!mandatory) builder.setNegativeButton("انصراف", null);
@@ -188,18 +240,28 @@ public class HesabyarLicensedActivity extends HesabyarItemsActivity {
                 if (!validEmail(mail)) { email.setError("ایمیل معتبر وارد کنید"); return; }
                 int serial = validateLicenseKey(code);
                 if (serial <= 0) { key.setError("کد لایسنس معتبر نیست"); return; }
+
+                String previousKey = normalizeKey(prefs.getString("license_key", ""));
+                long previousActivatedAt = prefs.getLong("license_activated_at", 0L);
+                if (!previousKey.isEmpty() && previousKey.equals(code) && previousActivatedAt > 0L && effectiveNow() >= previousActivatedAt + LICENSE_MS) {
+                    key.setError("اعتبار این کد تمام شده است؛ کد لایسنس جدید وارد کنید");
+                    return;
+                }
+
+                long activatedAt = System.currentTimeMillis();
                 prefs.edit()
                         .putBoolean("license_activated", true)
                         .putString("license_email", mail)
                         .putString("license_key", code)
                         .putInt("license_serial", serial)
-                        .putLong("license_activated_at", System.currentTimeMillis())
+                        .putLong("license_activated_at", activatedAt)
+                        .putLong("license_expires_at", activatedAt + LICENSE_MS)
                         .putString("backup_email", mail)
                         .apply();
                 new BackupManager(this).dataChanged();
                 licenseDialogVisible = false;
                 dialog.dismiss();
-                toast("لایسنس با موفقیت برای " + mail + " فعال شد");
+                toast("لایسنس یک‌ساله با موفقیت فعال شد");
                 showDashboard();
             });
         });
